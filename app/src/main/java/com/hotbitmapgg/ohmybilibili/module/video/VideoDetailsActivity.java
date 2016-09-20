@@ -1,5 +1,8 @@
 package com.hotbitmapgg.ohmybilibili.module.video;
 
+import android.animation.Animator;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -16,6 +19,8 @@ import android.support.v7.app.ActionBar;
 import android.support.v7.widget.Toolbar;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewAnimationUtils;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageView;
@@ -34,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.Bind;
+import butterknife.ButterKnife;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
 import rx.schedulers.Schedulers;
@@ -67,6 +73,8 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
 
     @Bind(R.id.app_bar_layout)
     AppBarLayout mAppBarLayout;
+    @Bind(R.id.video_overlay)
+    View mVideoOverlay;
 
     private List<Fragment> fragments = new ArrayList<>();
 
@@ -99,16 +107,18 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
         getVideoInfo();
 
         mFAB.setClickable(false);
-        mFAB.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.gray_20)));
-        mFAB.setTranslationY(-getResources().getDimension(R.dimen.floating_action_button_size_half));
+        mFAB.setBackgroundTintList(
+                ColorStateList.valueOf(getResources().getColor(R.color.gray_20)));
+        mFAB.setTranslationY(
+                -getResources().getDimension(R.dimen.floating_action_button_size_half));
         mFAB.setOnClickListener(new View.OnClickListener()
         {
 
             @Override
             public void onClick(View v)
             {
+                startFabAnimation();
 
-                VideoPlayerActivity.launch(VideoDetailsActivity.this, av);
             }
         });
 
@@ -120,6 +130,53 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
             {
 
                 setViewsTranslation(verticalOffset);
+            }
+        });
+    }
+
+    private void startFabAnimation()
+    {
+        ObjectAnimator translateAnimator = ObjectAnimator.ofFloat(mFAB, "translationY",
+                mFAB.getY() / 2);
+        int centerX = (int) (mFAB.getX() + mFAB.getWidth() / 2);
+        int centerY = (int) (mFAB.getY() / 2 + mFAB.getHeight() / 2);
+        float startRadius = mFAB.getWidth() / 2;
+        float endRadius = (float) Math.hypot(mVideoOverlay.getHeight(), mVideoOverlay.getWidth());
+
+        Animator ripperAnimator = ViewAnimationUtils.createCircularReveal(mVideoOverlay, centerX,
+                centerY, startRadius, endRadius);
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.setInterpolator(new AccelerateDecelerateInterpolator());
+        animatorSet.playSequentially(translateAnimator, ripperAnimator);
+        ripperAnimator.addListener(new Animator.AnimatorListener()
+        {
+            @Override
+            public void onAnimationStart(Animator animation)
+            {
+                mFAB.setVisibility(View.GONE);
+                mVideoOverlay.setBackgroundColor(getResources().getColor(R.color.colorPrimary));
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation)
+            {
+                mFAB.setVisibility(View.VISIBLE);
+                mFAB.setTranslationX(0);
+                mVideoOverlay.setBackgroundColor(
+                        getResources().getColor(android.R.color.transparent));
+                VideoPlayerActivity.launch(VideoDetailsActivity.this, av);
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation)
+            {
+
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animation)
+            {
+
             }
         });
     }
@@ -201,7 +258,7 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
 
         RetrofitHelper.getVideoDetailsApi()
                 .getVideoDetails(av)
-                .compose(this.<VideoDetails> bindToLifecycle())
+                .compose(this.<VideoDetails>bindToLifecycle())
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(new Action1<VideoDetails>()
@@ -222,7 +279,8 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
                     {
 
                         mFAB.setClickable(false);
-                        mFAB.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.gray_20)));
+                        mFAB.setBackgroundTintList(
+                                ColorStateList.valueOf(getResources().getColor(R.color.gray_20)));
                         LogUtil.all("获取视频详情失败" + throwable.getMessage());
                     }
                 });
@@ -267,6 +325,14 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
         mSlidingTabLayout.setViewPager(mViewPager);
     }
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState)
+    {
+        super.onCreate(savedInstanceState);
+        // TODO: add setContentView(...) invocation
+        ButterKnife.bind(this);
+    }
+
     public static class VideoDetailsPagerAdapter extends FragmentStatePagerAdapter
     {
 
@@ -274,7 +340,8 @@ public class VideoDetailsActivity extends RxAppCompatBaseActivity
 
         private List<String> titles;
 
-        public VideoDetailsPagerAdapter(FragmentManager fm, List<Fragment> fragments, List<String> titles)
+        public VideoDetailsPagerAdapter(FragmentManager fm, List<Fragment> fragments,
+                                        List<String> titles)
         {
 
             super(fm);
